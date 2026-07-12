@@ -46,3 +46,71 @@ jobs:
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.skip == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: hackerboxes-esp32-io
+            platform: esp32
+          - board: hackerboxes-esp32c3-oled
+            platform: esp32c3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout meshtastic/firmware @ ${{ needs.resolve.outputs.tag }}
+        uses: actions/checkout@v7
+        with:
+          repository: meshtastic/firmware
+          ref: ${{ needs.resolve.outputs.tag }}
+          submodules: recursive
+
+      - name: Build ${{ matrix.board }}
+        uses: meshtastic/gh-action-firmware@main
+        with:
+          pio_platform: ${{ matrix.platform }}
+          pio_env: ${{ matrix.board }}
+          pio_target: build
+
+      - name: Download unified OTA firmware (esp32)
+        if: matrix.platform == 'esp32'
+        working-directory: release
+        run: curl -fL -o mt-esp32-ota.bin https://github.com/meshtastic/esp32-unified-ota/releases/latest/download/mt-esp32-ota.bin
+
+      - name: Download BLE-only OTA firmware (esp32c3)
+        if: matrix.platform == 'esp32c3'
+        working-directory: release
+        run: curl -fL -o bleota-c3.bin https://github.com/meshtastic/firmware-ota/releases/latest/download/firmware-c3.bin
+
+      - name: Merge OTA binary into manifest
+        working-directory: release
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "esp32" ]; then
+            OTA_FILE="mt-esp32-ota.bin"
+          else
+            OTA_FILE="bleota-c3.bin"
+          fi
+          OTA_MD5=$(md5sum "$OTA_FILE" | cut -d' ' -f1)
+          OTA_SIZE=$(stat -c%s "$OTA_FILE")
+          for manifest in firmware-*.mt.json; do
+            [ -f "$manifest" ] || continue
+            jq --arg name "$OTA_FILE" --arg md5 "$OTA_MD5" --argjson bytes "$OTA_SIZE" --arg part "app1" \
+              'if .files | map(select(.name == $name)) | length == 0 then .files += [{"name": $name, "md5": $md5, "bytes": $bytes, "part_name": $part}] else . end' \
+              "$manifest" > "${manifest}.tmp" && mv "${manifest}.tmp" "$manifest"
+          done
+
+      - name: Upload board artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-${{ matrix.board }}-${{ needs.resolve.outputs.tag }}
+          path: |
+            release/*.mt.json
+            release/*.bin
+            release/*.uf2
+            release/*.hex
+            release/device-*.sh
+            release/device-*.bat
+          if-no-files-found: error
