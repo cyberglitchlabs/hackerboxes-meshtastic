@@ -150,6 +150,6 @@ jobs:
           set -euo pipefail
           gh release create "$TAG" \
             --repo "${{ github.repository }}" \
-            --title "HackerBox #0111 Firmware ${TAG}" \
+            --title "${TAG}" \
             --notes "Unofficial community build of Meshtastic firmware ${TAG} for both HackerBox #0111 boards (hackerboxes-esp32-io, hackerboxes-esp32c3-oled). Built from https://github.com/meshtastic/firmware/releases/tag/${TAG}." \
             dist/*.zip
