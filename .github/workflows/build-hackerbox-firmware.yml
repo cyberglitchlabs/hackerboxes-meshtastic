@@ -114,3 +114,42 @@ jobs:
             release/device-*.sh
             release/device-*.bat
           if-no-files-found: error
+
+  publish:
+    needs: [resolve, build]
+    if: needs.resolve.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ needs.resolve.outputs.tag }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v7
+
+      - name: Download hackerboxes-esp32-io artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: firmware-hackerboxes-esp32-io-${{ needs.resolve.outputs.tag }}
+          path: output/hackerboxes-esp32-io
+
+      - name: Download hackerboxes-esp32c3-oled artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: firmware-hackerboxes-esp32c3-oled-${{ needs.resolve.outputs.tag }}
+          path: output/hackerboxes-esp32c3-oled
+
+      - name: Zip firmware bundles
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ( cd output/hackerboxes-esp32-io && zip -j -9 -r "$OLDPWD/dist/firmware-hackerboxes-esp32-io-${TAG}.zip" . )
+          ( cd output/hackerboxes-esp32c3-oled && zip -j -9 -r "$OLDPWD/dist/firmware-hackerboxes-esp32c3-oled-${TAG}.zip" . )
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "HackerBox #0111 Firmware ${TAG}" \
+            --notes "Unofficial community build of Meshtastic firmware ${TAG} for both HackerBox #0111 boards (hackerboxes-esp32-io, hackerboxes-esp32c3-oled). Built from https://github.com/meshtastic/firmware/releases/tag/${TAG}." \
+            dist/*.zip
