@@ -137,6 +137,18 @@ upstream.
 - **No secrets required** beyond the default `GITHUB_TOKEN` (`contents: write`,
   for creating the release in this repo). Reading meshtastic/firmware needs no
   auth (public repo).
+- **Mutable refs are a deliberate trade-off, not an oversight.** Pinning
+  `meshtastic/gh-action-firmware@main` to a mutable branch (rather than a SHA or
+  version tag), and downloading OTA companion binaries from each OTA repo's
+  `.../releases/latest/...` (rather than a tag-matched release), are both
+  intentional choices consistent with this project's "track upstream
+  automatically" goal: they mean the build action and OTA binaries always match
+  meshtastic's current tooling/firmware without this workflow needing manual
+  bumps. The accepted cost is reduced reproducibility — rebuilding an old tag
+  later may not byte-for-byte reproduce what was originally published, since
+  `@main` and `latest` can have moved on. That's acceptable here because this
+  project's whole purpose is following upstream forward, not archiving exact
+  historical builds.
 
 ## Testing / verification plan
 
